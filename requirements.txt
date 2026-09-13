@@ -12,3 +12,8 @@ fastapi>=0.103.0
 uvicorn>=0.23.0
 streamlit>=1.26.0
 plotly>=5.16.0
+transformers
+peft
+trl
+bitsandbytes
+datasets
