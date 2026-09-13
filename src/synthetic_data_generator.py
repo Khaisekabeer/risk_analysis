@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Dict
 from scipy.special import expit
 import uuid
+import json
 
 from config import RAW_DATA_DIR, SYNTHETIC_DATA_CONFIG, LOSS_CONFIG
 
@@ -12,6 +13,23 @@ class RelationalDataGenerator:
         self.config = config
         self.loss_config = loss_config
         self.num_assets = self.config["num_assets"]
+        np.random.seed(self.config["random_seed"])
+        
+        # Load deterministic actuarial benchmarks
+        benchmark_path = RAW_DATA_DIR / "actuarial_benchmarks.json"
+        if benchmark_path.exists():
+            with open(benchmark_path, "r") as f:
+                self.actuarial_data = json.load(f)["benchmarks"]
+        else:
+            # Fallback safe defaults if file missing
+            self.actuarial_data = {
+                "cost_per_stolen_record_inr": 13500,
+                "average_records_per_server": 50000,
+                "average_records_per_database": 250000,
+                "regulatory_fines": {"low_sensitivity": 0, "medium_sensitivity": 500000, "high_sensitivity": 2500000, "critical_pii_pci": 5000000},
+                "reputational_damage_multiplier_per_criticality_level": 500000,
+                "downtime_resolution_hours_mean": 24
+            }
         np.random.seed(self.config["random_seed"])
         
         # Threat categories
@@ -213,16 +231,48 @@ class RelationalDataGenerator:
             # Historical incident generation for ML
             incident_occurred = np.random.binomial(n=1, p=p_incident)
             
-            # ML Target: Total Loss (if incident happened historically)
+            # ML Target: Granular Loss Breakdown
+            downtime_loss = 0.0
+            data_breach_loss = 0.0
+            regulatory_penalty = 0.0
+            reputational_damage = 0.0
             ml_total_loss = 0.0
+            
             if incident_occurred == 1:
-                base_loss = np.random.lognormal(mean=self.loss_config["mu"], sigma=self.loss_config["sigma"])
-                ml_total_loss = base_loss * row["asset_criticality_score"] * row["data_sensitivity_score"]
+                # 1. Deterministic Downtime Costs (Mean hours * known hourly cost)
+                downtime_loss = self.actuarial_data["downtime_resolution_hours_mean"] * row["hourly_downtime_cost_inr"]
+                
+                # 2. Deterministic Data Breach Costs (Records * IBM Cost Per Record)
+                # Assume Databases have 5x more records than normal servers
+                records = self.actuarial_data["average_records_per_database"] if row["asset_type"] == "Database" else self.actuarial_data["average_records_per_server"]
+                # Scale by sensitivity score (1-5), where 5 means 100% of records are sensitive PII
+                percent_sensitive = row["data_sensitivity_score"] / 5.0
+                data_breach_loss = (records * percent_sensitive) * self.actuarial_data["cost_per_stolen_record_inr"]
+                
+                # 3. Deterministic Regulatory Penalties (Mapped to RBI/SEBI standard baselines)
+                if row["data_sensitivity_score"] <= 2:
+                    regulatory_penalty = self.actuarial_data["regulatory_fines"]["low_sensitivity"]
+                elif row["data_sensitivity_score"] == 3:
+                    regulatory_penalty = self.actuarial_data["regulatory_fines"]["medium_sensitivity"]
+                elif row["data_sensitivity_score"] == 4:
+                    regulatory_penalty = self.actuarial_data["regulatory_fines"]["high_sensitivity"]
+                else:
+                    regulatory_penalty = self.actuarial_data["regulatory_fines"]["critical_pii_pci"]
+                    
+                # 4. Deterministic Reputational Effects (Fixed multiplier based on asset criticality)
+                if row["internet_exposed"]:
+                    reputational_damage = self.actuarial_data["reputational_damage_multiplier_per_criticality_level"] * row["asset_criticality_score"]
+                
+                ml_total_loss = downtime_loss + data_breach_loss + regulatory_penalty + reputational_damage
                 ml_total_loss = min(ml_total_loss, self.loss_config["max_loss"])
                 
             incidents.append({
                 "asset_id": row["asset_id"],
                 "incident_occurred": incident_occurred,
+                "downtime_loss_inr": round(downtime_loss, 2),
+                "data_breach_loss_inr": round(data_breach_loss, 2),
+                "regulatory_penalty_inr": round(regulatory_penalty, 2),
+                "reputational_damage_inr": round(reputational_damage, 2),
                 "total_loss_inr": round(ml_total_loss, 2)
             })
             
