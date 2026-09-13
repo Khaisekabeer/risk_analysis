@@ -11,6 +11,7 @@ import {
 } from '../../components/ui'
 import { endpoints } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
+import * as fallback from '../../lib/fallbacks'
 
 const STATUS_STYLE = {
   Covered: { text: 'text-status-low', dot: 'bg-status-low' },
@@ -22,10 +23,13 @@ export default function Compliance() {
   const [framework, setFramework] = useState(null)
   const [toast, setToast] = useState(null)
 
-  const frameworks = useApi(() => endpoints.frameworks().then((r) => r.frameworks), [])
+  const frameworks = useApi(() => endpoints.frameworks().then((r) => r.frameworks), [], {
+    fallback: fallback.frameworks,
+  })
   const mappings = useApi(
     () => endpoints.complianceMappings(framework).then((r) => r.mappings),
     [framework],
+    { fallback: fallback.mappings },
   )
 
   const exportReport = useAction(async (format) => {

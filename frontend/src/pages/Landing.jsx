@@ -5,11 +5,34 @@ import HeroCanvas from '../components/landing/HeroCanvas'
 import Sparkline from '../components/landing/Sparkline'
 import { Button, Card, Chip, Eyebrow, Icon } from '../components/ui'
 import { formatINR } from '../lib/formatINR'
-import { solveKnapsack } from '../lib/knapsack'
 import { useTheme } from '../lib/theme'
-import * as demo from '../lib/demoData'
+import { endpoints } from '../lib/apiClient'
+import { useApi } from '../lib/useApi'
+import * as fallback from '../lib/fallbacks'
 
-const { total: FUNDED_REDUCTION } = solveKnapsack(demo.controls, demo.BUDGET)
+/**
+ * The landing page quotes the same figures the dashboard does, so it reads
+ * them from the live engine and falls back to the saved aggregates when the
+ * service is not running — a marketing page must never show a spinner or an
+ * error, so there is no loading state here.
+ */
+function useHeadlineFigures() {
+  const kpis = useApi(() => endpoints.kpis().then((r) => ({ ...fallback.kpis, ...r })), [], {
+    fallback: fallback.kpis,
+  })
+  const plan = useApi(() => endpoints.optimizationPlan(), [], { fallback: fallback.plan() })
+  const k = kpis.data ?? fallback.kpis
+  const p = plan.data ?? fallback.plan()
+  return {
+    eal: k.enterprise_eal_inr,
+    var95: k.enterprise_var_95_inr,
+    assets: k.portfolio.assets,
+    scenarios: k.scenario_count,
+    exposed: k.portfolio.internetExposed,
+    budget: p.budget_inr,
+    residual: p.residual_eal_inr,
+  }
+}
 
 function Reveal({ children, delay = 0, className = '' }) {
   const ref = useRef(null)
@@ -74,6 +97,7 @@ export default function Landing() {
   const [risk, setRisk] = useState({ value: 24.6, delta: 0 })
   const onValue = useCallback((value, delta) => setRisk({ value, delta }), [])
   const { theme } = useTheme()
+  const figures = useHeadlineFigures()
 
   return (
     <div id="top">
@@ -100,9 +124,9 @@ export default function Landing() {
 
             <div className="mt-2 flex flex-wrap justify-center gap-xl">
               {[
-                [formatINR(demo.EAL, { compact: true }), 'expected annual loss, current posture'],
-                [demo.PORTFOLIO.assets.toLocaleString('en-IN'), 'assets under continuous assessment'],
-                [demo.PORTFOLIO.scenarios.toLocaleString('en-IN'), 'risk scenarios modelled'],
+                [formatINR(figures.eal, { compact: true }), 'expected annual loss, current posture'],
+                [figures.assets.toLocaleString('en-IN'), 'assets under continuous assessment'],
+                [figures.scenarios.toLocaleString('en-IN'), 'risk scenarios modelled'],
               ].map(([num, label], i) => (
                 <div
                   key={label}
@@ -157,8 +181,8 @@ export default function Landing() {
                     <Sparkline onValue={onValue} />
                     <div className="mt-md flex flex-wrap gap-x-lg gap-y-md border-t border-outline-variant pt-md font-mono text-xs text-on-variant">
                       <span>sources: 6 vendor APIs</span>
-                      <span>assets: {demo.PORTFOLIO.assets.toLocaleString('en-IN')}</span>
-                      <span>exposed: {demo.PORTFOLIO.internetExposed.toLocaleString('en-IN')}</span>
+                      <span>assets: {figures.assets.toLocaleString('en-IN')}</span>
+                      <span>exposed: {figures.exposed.toLocaleString('en-IN')}</span>
                     </div>
                   </div>
                 </Card>
@@ -178,13 +202,13 @@ export default function Landing() {
                   </p>
                   <div className="mt-auto pt-lg">
                     <span className="block font-mono text-4xl font-medium">
-                      {formatINR(demo.EAL, { compact: true })}
+                      {formatINR(figures.eal, { compact: true })}
                     </span>
                     <span className="block text-xs text-on-variant">
                       expected annual loss at current posture
                     </span>
                     <span className="mt-md block border-t border-outline-variant pt-md font-mono text-sm text-accent">
-                      → {formatINR(demo.EAL - FUNDED_REDUCTION, { compact: true })} after funding the
+                      → {formatINR(figures.residual, { compact: true })} after funding the
                       optimizer's picks
                     </span>
                   </div>
@@ -261,17 +285,17 @@ export default function Landing() {
                   'An XGBoost model predicts incident probability per asset; impact is priced from actuarial benchmarks — cost per stolen record, regulatory fine tiers, downtime hours — not a guessed multiplier. A 2,000-iteration Monte Carlo turns that into EAL and VaR.',
                   `$ python risk_engine.py
 {
-  "eal": ${demo.EAL},        // ${formatINR(demo.EAL, { compact: true })}
-  "var_95": ${demo.VAR95},   // ${formatINR(demo.VAR95, { compact: true })}
-  "scenarios": ${demo.PORTFOLIO.scenarios}
+  "eal": ${Math.round(figures.eal)},   // ${formatINR(figures.eal, { compact: true })}
+  "var_95": ${Math.round(figures.var95)},  // ${formatINR(figures.var95, { compact: true })}
+  "scenarios": ${figures.scenarios}
 }`,
                 ],
                 [
                   '03',
                   'Fund what reduces loss',
                   'A 0/1 knapsack picks the control set that maximises risk reduction under your budget, with each control mapped to the framework clauses it satisfies.',
-                  `$ python investment_optimizer.py --budget ${demo.BUDGET}
-✓ funded → ${formatINR(FUNDED_REDUCTION, { compact: true })} reduction`,
+                  `$ python investment_optimizer.py --budget ${Math.round(figures.budget)}
+✓ funded → ${formatINR(figures.eal - figures.residual, { compact: true })} reduction`,
                 ],
               ].map(([num, title, body, code], i) => (
                 <Reveal key={num} delay={i * 60}>

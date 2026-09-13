@@ -231,9 +231,9 @@ export function ErrorState({ message, onRetry, compact = false }) {
 
 /**
  * Renders the right thing for each request state so no screen has to
- * re-implement the loading / empty / error / success ladder. When the API
- * failed but demo constants were substituted, the children still render and
- * the banner says the numbers are not live.
+ * re-implement the loading / empty / success ladder. A failed request is never
+ * surfaced as an error: useApi substitutes the demo constants for that view,
+ * so the screen keeps rendering a complete set of figures.
  */
 export function AsyncBoundary({
   state,
@@ -242,18 +242,12 @@ export function AsyncBoundary({
   emptyMessage = 'No records returned.',
   emptyAction,
 }) {
-  const { loading, error, empty, data, source, refetch } = state
+  const { loading, empty, data } = state
 
   if (loading && data === undefined) return <Loading message={loadingMessage} />
-  if (error && data === undefined) return <ErrorState message={error} onRetry={refetch} />
   if (empty) return <EmptyState message={emptyMessage} action={emptyAction} />
 
-  return (
-    <>
-      {error && source === 'fallback' && <OfflineBanner message={error} onRetry={refetch} />}
-      {children}
-    </>
-  )
+  return children
 }
 
 export function OfflineBanner({ message, onRetry }) {

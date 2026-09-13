@@ -263,8 +263,11 @@ class RelationalDataGenerator:
                 if row["internet_exposed"]:
                     reputational_damage = self.actuarial_data["reputational_damage_multiplier_per_criticality_level"] * row["asset_criticality_score"]
                 
+                # The total is the sum of its four priced components. LOSS_CONFIG's
+                # max_loss belongs to the retired lognormal draw and is an order of
+                # magnitude below the data-breach term alone, so capping here would
+                # flatten every incident to the same number and destroy the breakdown.
                 ml_total_loss = downtime_loss + data_breach_loss + regulatory_penalty + reputational_damage
-                ml_total_loss = min(ml_total_loss, self.loss_config["max_loss"])
                 
             incidents.append({
                 "asset_id": row["asset_id"],

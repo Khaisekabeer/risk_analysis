@@ -15,7 +15,7 @@ import { MultiRadar } from '../../components/charts'
 import { formatINR } from '../../lib/formatINR'
 import { endpoints } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
-import * as demo from '../../lib/demoData'
+import * as fallback from '../../lib/fallbacks'
 
 // Tailwind's scanner needs literal class strings — no `bg-status-${x}`.
 const TONE_BAR = {
@@ -107,46 +107,34 @@ export default function Dashboard() {
   const [drill, setDrill] = useState(null)
   const [selectedRuns, setSelectedRuns] = useState(null) // null = all runs
 
-  const kpis = useApi(() => endpoints.kpis(), [], {
-    fallback: {
-      enterprise_eal_inr: demo.EAL,
-      enterprise_var_95_inr: demo.VAR95,
-      enterprise_var_99_inr: demo.VAR99,
-      iterations: demo.MC_ITERATIONS,
-      scenario_count: demo.PORTFOLIO.scenarios,
-      open_vulnerabilities: demo.vulnStatus.Unpatched + demo.vulnStatus['In Progress'],
-      portfolio: demo.PORTFOLIO,
-      computed_at: null,
-    },
+  // Merged over the demo shape so a partial response can never leave a field
+  // the UI reads undefined.
+  const kpis = useApi(() => endpoints.kpis().then((r) => ({ ...fallback.kpis, ...r })), [], {
+    fallback: fallback.kpis,
   })
 
   const contributors = useApi(
     () => endpoints.contributors(6).then((r) => r.contributors),
     [],
-    { fallback: demo.topRisks },
+    { fallback: fallback.contributors },
   )
 
   const threats = useApi(() => endpoints.threats().then((r) => r.threats), [], {
-    fallback: demo.threats,
+    fallback: fallback.threats,
   })
 
   const runs = useApi(() => endpoints.runs(12).then((r) => r.runs), [], {
-    fallback: demo.trend.map((t, i) => ({
-      run_id: i,
-      label: t.label,
-      eal_inr: t.eal,
-      var_95_inr: t.var95,
-    })),
+    fallback: fallback.runs,
   })
 
   const plan = useApi(() => endpoints.optimizationPlan(), [], {
-    fallback: { controls: demo.controls, budget_inr: demo.BUDGET },
+    fallback: fallback.plan(),
   })
 
   const newRun = useAction(() => endpoints.runSimulation({}))
 
   const k = kpis.data
-  const portfolio = k?.portfolio ?? demo.PORTFOLIO
+  const portfolio = k?.portfolio ?? fallback.kpis.portfolio
   const totalAssetValue = portfolio.total_asset_value_inr
 
   // VaR₉₅ as a share of total asset value, scaled to a 0-100 read. There is

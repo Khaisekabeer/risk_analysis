@@ -12,6 +12,7 @@ import {
 import { formatINR } from '../../lib/formatINR'
 import { endpoints, describeError } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
+import * as fallback from '../../lib/fallbacks'
 
 const compact = (v) => formatINR(v, { compact: true })
 
@@ -19,8 +20,12 @@ export default function Telemetry() {
   const [upload, setUpload] = useState(null) // { name, progress, result, error }
   const fileInput = useRef(null)
 
-  const presets = useApi(() => endpoints.presets().then((r) => r.presets), [])
-  const events = useApi(() => endpoints.telemetryEvents(12).then((r) => r.events), [])
+  const presets = useApi(() => endpoints.presets().then((r) => r.presets), [], {
+    fallback: fallback.presets,
+  })
+  const events = useApi(() => endpoints.telemetryEvents(12).then((r) => r.events), [], {
+    fallback: fallback.events,
+  })
   const loadPreset = useAction((name) => endpoints.loadPreset(name))
 
   const [lastPreset, setLastPreset] = useState(null)

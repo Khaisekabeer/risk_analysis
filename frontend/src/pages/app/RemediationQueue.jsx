@@ -3,6 +3,7 @@ import { AsyncBoundary, Chip, Panel, Severity } from '../../components/ui'
 import { formatINR } from '../../lib/formatINR'
 import { endpoints } from '../../lib/apiClient'
 import { useApi } from '../../lib/useApi'
+import * as fallback from '../../lib/fallbacks'
 
 const COLUMNS = ['Open', 'In Progress', 'Resolved']
 const COLUMN_TONE = {
@@ -52,6 +53,7 @@ function Ticket({ item }) {
 
 export default function RemediationQueue() {
   const queue = useApi(() => endpoints.remediation(90), [], {
+    fallback: fallback.remediation,
     isEmpty: (d) => !d?.columns || COLUMNS.every((c) => !(d.columns[c] ?? []).length),
   })
 
