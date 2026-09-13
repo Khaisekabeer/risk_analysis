@@ -34,13 +34,16 @@ def run_lora_finetuning(mock_run=False):
     # --- Actual Production Training Code (Requires NVIDIA GPU) ---
     import torch
     from datasets import load_dataset
+    # pyrefly: ignore [missing-import]
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
         BitsAndBytesConfig,
         TrainingArguments,
     )
+    # pyrefly: ignore [missing-import]
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    # pyrefly: ignore [missing-import]
     from trl import SFTTrainer
 
     print("Loading dataset into HuggingFace format...")

@@ -3,6 +3,8 @@ import pandas as pd
 from pathlib import Path
 from config import RAW_DATA_DIR
 import datetime
+import markdown
+from xhtml2pdf import pisa
 
 class AuditReporter:
     """
@@ -12,6 +14,7 @@ class AuditReporter:
     def __init__(self):
         self.db_path = RAW_DATA_DIR.parent / "risk_analysis.db"
         self.report_path = RAW_DATA_DIR.parent / "Regulatory_Audit_Evidence.md"
+        self.pdf_path = RAW_DATA_DIR.parent / "Enterprise_Risk_Audit_Report.pdf"
 
     def generate_report(self):
         print(f"Generating Regulatory Audit Evidence Report...")
@@ -53,11 +56,43 @@ class AuditReporter:
                     else:
                         f.write("No optimized actions found. Run the optimizer first.\n")
                         
-                print(f"Report generated successfully at: {self.report_path}")
-                print("(Note: In full production, this Markdown converts to a signed PDF).")
+                print(f"Markdown Report generated successfully at: {self.report_path}")
+                self.generate_pdf()
                 
         except Exception as e:
             print(f"Failed to generate report: {e}")
+
+    def generate_pdf(self):
+        print("Converting Markdown to formal Enterprise PDF...")
+        try:
+            with open(self.report_path, "r", encoding="utf-8") as f:
+                md_content = f.read()
+                
+            html_content = markdown.markdown(md_content, extensions=['tables'])
+            
+            css_style = """
+            <style>
+                body { font-family: Helvetica, Arial, sans-serif; font-size: 12pt; color: #333; }
+                h1 { color: #1a365d; border-bottom: 2px solid #1a365d; padding-bottom: 5px; }
+                h2 { color: #2b6cb0; margin-top: 20px; }
+                h3 { color: #4a5568; }
+                li { margin-bottom: 10px; }
+                code { background-color: #f7fafc; padding: 2px 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-family: monospace; }
+            </style>
+            """
+            
+            full_html = f"<html><head>{css_style}</head><body>{html_content}</body></html>"
+            
+            with open(self.pdf_path, "wb") as f_pdf:
+                pisa_status = pisa.CreatePDF(full_html, dest=f_pdf)
+                
+            if pisa_status.err:
+                print("Error occurred during PDF generation.")
+            else:
+                print(f"PDF Report generated successfully at: {self.pdf_path}")
+                
+        except Exception as e:
+            print(f"Failed to generate PDF: {e}")
 
 if __name__ == "__main__":
     reporter = AuditReporter()

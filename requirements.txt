@@ -17,3 +17,5 @@ peft
 trl
 bitsandbytes
 datasets
+markdown
+xhtml2pdf
