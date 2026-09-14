@@ -582,12 +582,23 @@ def dashboard_contributors(limit: int = Query(10, ge=1, le=50)):
     eal = joined.groupby("business_unit")["eal_inr"].sum()
     counts = assets.groupby("business_unit")["asset_id"].count()
 
+    # The real threat split per unit. The drill-down used to scale the global
+    # threat mix by the unit's share of EAL, which made every unit look
+    # identical; these are the unit's own scenarios grouped by category.
+    by_unit_threat = joined.groupby(["business_unit", "threat_category"])["eal_inr"].sum()
+
     rows = [
         {
             "id": f"bu-{i}",
             "name": str(unit),
             "eal": float(value),
             "assets": int(counts.get(unit, 0)),
+            "threat_mix": [
+                {"name": str(category), "eal": float(amount)}
+                for category, amount in by_unit_threat.get(unit, pd.Series(dtype=float))
+                .sort_values(ascending=False)
+                .items()
+            ],
         }
         for i, (unit, value) in enumerate(eal.sort_values(ascending=False).items(), start=1)
     ]
@@ -1006,9 +1017,17 @@ def compliance_rows(budget: Optional[float]) -> list[dict]:
             status = "Not funded"
         else:
             status = "No mapping"
+        # The owning framework, resolved from the clause prefix. The compliance
+        # table renders this column, so it has to come from here rather than be
+        # re-derived (and previously not derived at all) in the browser.
+        key, name = next(
+            ((k, n) for k, n, p in FRAMEWORKS if clause.startswith(p)), (None, "Unmapped")
+        )
         rows.append(
             {
                 "clause": clause,
+                "framework": key,
+                "frameworkName": name,
                 "objective": CLAUSE_OBJECTIVES.get(clause, "Mapped control objective"),
                 "control": control,
                 "openFindings": int(open_by_clause.get(clause, 0)),

@@ -6,13 +6,6 @@ import { formatINR } from '../../lib/formatINR'
 import { endpoints, describeError } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
 
-const FALLBACK_PROMPTS = [
-  'What is our total financial exposure?',
-  'Which business units carry the most risk?',
-  'What should we fund with a budget of 80 lakh?',
-  'How many critical vulnerabilities are still open?',
-]
-
 const MONEY_KEYS = /(_inr|^eal$|^cost$|^reduction$)/i
 
 function formatCell(key, value) {
@@ -81,9 +74,10 @@ export default function Ask() {
   const [uploads, setUploads] = useState([]) // in-flight, with progress
   const fileInput = useRef(null)
 
-  const suggestions = useApi(() => endpoints.suggestions().then((r) => r.suggestions), [], {
-    fallback: FALLBACK_PROMPTS,
-  })
+  // GET /api/v1/copilot/suggestions — the six canned questions the backend's
+  // keyword router actually recognises. No local copy: a stale local list would
+  // offer prompts the router has since stopped handling.
+  const suggestions = useApi(() => endpoints.suggestions().then((r) => r.suggestions), [])
 
   const ask = useAction((question, files) => endpoints.ask(question, files))
 
@@ -148,7 +142,7 @@ export default function Ask() {
     event.target.value = ''
   }
 
-  const prompts = suggestions.data ?? FALLBACK_PROMPTS
+  const prompts = suggestions.data ?? []
   const busy = ask.pending
 
   const attachmentChips = (
@@ -273,6 +267,17 @@ export default function Ask() {
             </div>
 
             <div className="flex max-w-[720px] flex-wrap justify-center gap-2">
+              {suggestions.error && (
+                <span className="text-[12.5px] text-on-variant">
+                  Suggested questions unavailable — {suggestions.error}{' '}
+                  <button
+                    onClick={suggestions.refetch}
+                    className="font-medium text-accent hover:underline"
+                  >
+                    Retry
+                  </button>
+                </span>
+              )}
               {prompts.map((p) => (
                 <button
                   key={p}

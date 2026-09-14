@@ -14,7 +14,6 @@ import { CoverageBars } from '../../components/charts'
 import { formatINR } from '../../lib/formatINR'
 import { endpoints } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
-import * as fallback from '../../lib/fallbacks'
 
 const TABS = ['Vulnerabilities', 'Controls', 'Assets', 'Compliance']
 const STATUS_TONE = {
@@ -55,12 +54,10 @@ function Vulnerabilities() {
         ...(status ? { status } : {}),
       }),
     [query, severity, status],
-    { fallback: fallback.vulnerabilities, isEmpty: (d) => !d?.rows?.length },
+    { isEmpty: (d) => !d?.rows?.length },
   )
 
-  const summary = useApi(() => endpoints.vulnerabilitySummary(), [], {
-    fallback: fallback.vulnerabilitySummary,
-  })
+  const summary = useApi(() => endpoints.vulnerabilitySummary(), [])
   const rows = vulns.data?.rows ?? []
 
   return (
@@ -176,7 +173,6 @@ function Vulnerabilities() {
 
 function Controls() {
   const controls = useApi(() => endpoints.controls(), [], {
-    fallback: fallback.controls,
     isEmpty: (d) => !d?.by_asset_type?.length,
   })
   const overall = controls.data?.overall
@@ -220,7 +216,6 @@ function Controls() {
 
 function Assets() {
   const assets = useApi(() => endpoints.assets(8), [], {
-    fallback: fallback.assets,
     isEmpty: (d) => !d?.mix?.length,
   })
   const mix = assets.data?.mix ?? []
@@ -296,13 +291,10 @@ function Assets() {
 
 function ComplianceTab() {
   const [framework, setFramework] = useState(null)
-  const frameworks = useApi(() => endpoints.frameworks().then((r) => r.frameworks), [], {
-    fallback: fallback.frameworks,
-  })
+  const frameworks = useApi(() => endpoints.frameworks().then((r) => r.frameworks), [])
   const mappings = useApi(
     () => endpoints.complianceMappings(framework).then((r) => r.mappings),
     [framework],
-    { fallback: fallback.mappings },
   )
 
   return (

@@ -1,9 +1,19 @@
 import { useState } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import AppLayout from '../../components/app/AppLayout'
-import { Button, Chip, Field, Icon, Input, Panel, Spinner } from '../../components/ui'
+import {
+  AsyncBoundary,
+  Button,
+  Chip,
+  Field,
+  Icon,
+  Input,
+  Panel,
+  Spinner,
+} from '../../components/ui'
+import { formatINR } from '../../lib/formatINR'
 import { endpoints } from '../../lib/apiClient'
-import { useAction } from '../../lib/useApi'
+import { useApi, useAction } from '../../lib/useApi'
 
 const LEVELS = ['High', 'Medium', 'Low']
 
@@ -32,19 +42,14 @@ function LevelPicker({ value, onChange }) {
 
 export default function BusinessProcesses() {
   const { register, control, handleSubmit, watch, setValue, formState } = useForm({
+    // An empty form: the operator describes their own process. The worked
+    // "Payments Gateway" example that used to sit here read as saved data.
     defaultValues: {
-      name: 'Payments Gateway',
-      assetCriticality: 120000000,
+      name: '',
+      assetCriticality: '',
       description: '',
-      activities: [
-        { name: 'Authorise transaction', avlReq: 'High' },
-        { name: 'Settle with acquirer', avlReq: 'High' },
-        { name: 'Reconcile ledger', avlReq: 'Medium' },
-      ],
-      informationItems: [
-        { name: 'Cardholder PAN', confReq: 'High', intReq: 'High' },
-        { name: 'Settlement batch file', confReq: 'Medium', intReq: 'High' },
-      ],
+      activities: [{ name: '', avlReq: 'Medium' }],
+      informationItems: [{ name: '', confReq: 'Medium', intReq: 'Medium' }],
     },
   })
 
@@ -54,6 +59,10 @@ export default function BusinessProcesses() {
 
   const [saved, setSaved] = useState(null)
   const create = useAction((payload) => endpoints.createBusinessProcess(payload))
+
+  // GET /api/v1/business-processes — what has actually been persisted. Without
+  // this the page was write-only: a saved process vanished on the next render.
+  const existing = useApi(() => endpoints.businessProcesses(50).then((r) => r.processes), [])
 
   const onSubmit = async (data) => {
     const outcome = await create.run({
@@ -68,6 +77,7 @@ export default function BusinessProcesses() {
       })),
     })
     setSaved(outcome.ok ? outcome.result : null)
+    if (outcome.ok) existing.refetch()
   }
 
   return (
@@ -223,16 +233,35 @@ export default function BusinessProcesses() {
             </pre>
           </Panel>
 
-          <Panel title="Why these levels matter" className="min-h-[140px] flex-1">
-            <p className="text-sm leading-relaxed text-on-variant">
-              Requirement levels are the left-hand side of every gap:{' '}
-              <span className="text-on-surface">Gap = Requirement − Estimated Security</span>. They
-              propagate upward through the dependency relations, so a High on one information item
-              can raise the derived requirement of everything that reads it.
-            </p>
-            <p className="mt-4 text-sm leading-relaxed text-on-variant">
-              Levels map to 10 / 5 / 2 internally, matching the source methodology’s worked example.
-            </p>
+          <Panel
+            title="Saved processes"
+            actions={<Chip>{(existing.data ?? []).length} stored</Chip>}
+            className="min-h-[160px] flex-1"
+            bodyClassName="gap-2 overflow-y-auto"
+          >
+            <AsyncBoundary
+              state={existing}
+              loadingMessage="Loading saved processes…"
+              emptyMessage="No business process has been saved yet."
+            >
+              {(existing.data ?? []).map((p) => (
+                <div
+                  key={p.id}
+                  className="rounded-xs border border-outline-variant px-3 py-2.5 text-[12.5px]"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="min-w-0 truncate font-medium">{p.name}</span>
+                    <span className="flex-none font-mono text-[11px] text-on-variant">
+                      {formatINR(p.asset_criticality_inr, { compact: true })}
+                    </span>
+                  </div>
+                  <p className="mt-1 font-mono text-[11px] text-on-variant">
+                    {p.activities.length} activities · {p.information_items.length} information
+                    items
+                  </p>
+                </div>
+              ))}
+            </AsyncBoundary>
           </Panel>
 
           {create.error && (
@@ -246,7 +275,8 @@ export default function BusinessProcesses() {
               className="flex-none rounded-xs border border-status-low/40 bg-status-low/5 px-3 py-2 text-xs leading-relaxed text-on-variant"
             >
               <span className="font-medium text-on-surface">{saved.name}</span> saved as process{' '}
-              {saved.id}. {saved.note}
+              {saved.id} — {saved.activities} activities, {saved.information_items} information
+              items.
             </p>
           )}
 

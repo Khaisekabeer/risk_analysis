@@ -6,16 +6,16 @@ import { describeError } from './apiClient'
  * empty and error — so they live here rather than being re-implemented per
  * screen (docs/frontend-backend-integration.md, Request State Rules).
  *
- * `fallback` is the documented demo constant to fall back on when the API is
- * unreachable. When it is used, `source` becomes 'fallback' so the UI can say
- * so out loud instead of passing stale numbers off as live ones.
+ * There is deliberately no fallback data: when a request fails the view shows
+ * the error and offers a retry. Substituting stand-in figures used to hide
+ * genuine integration faults behind numbers that looked live, which is the
+ * one failure mode this layer must never produce.
  */
-export function useApi(fetcher, deps = [], { fallback, enabled = true, isEmpty } = {}) {
+export function useApi(fetcher, deps = [], { enabled = true, isEmpty } = {}) {
   const [state, setState] = useState({
     data: undefined,
     loading: enabled,
     error: null,
-    source: null,
   })
   const alive = useRef(true)
   const fetcherRef = useRef(fetcher)
@@ -39,15 +39,12 @@ export function useApi(fetcher, deps = [], { fallback, enabled = true, isEmpty }
     try {
       const data = await fetcherRef.current()
       if (!alive.current) return
-      setState({ data, loading: false, error: null, source: 'api' })
+      setState({ data, loading: false, error: null })
     } catch (error) {
       if (!alive.current) return
-      setState({
-        data: fallback,
-        loading: false,
-        error: describeError(error),
-        source: fallback === undefined ? null : 'fallback',
-      })
+      // The previous payload is dropped too: a stale success next to a live
+      // error reads as though the screen is still current.
+      setState({ data: undefined, loading: false, error: describeError(error) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps])

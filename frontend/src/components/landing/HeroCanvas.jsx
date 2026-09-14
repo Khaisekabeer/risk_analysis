@@ -20,6 +20,8 @@ import { useTheme } from '../../lib/theme'
 const SIM_SIZE = 128 // texture is SIM_SIZE², capped to the sample count below
 
 const SIMPLEX_GLSL = `
+#define PI 3.14159265359
+#define TAU 6.28318530718
 vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
 vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
 vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
@@ -123,16 +125,26 @@ void main() {
   float ambient = snoise(vec3(home * 2.0 + vec2(18.49, 72.97), time * 0.5));
   response += pow((ambient + 1.5) * 0.5, 2.0) * 1.0;
 
-  // Layered turbulence: broad swirl plus fine grain.
-  float n1 = snoise(vec3(home * 4.0 + vec2(88.49, 32.44), time * 0.35));
-  float n2 = snoise(vec3(home * 4.0 + vec2(50.90, 120.95), time * 0.35));
+  // Omnidirectional flow. One noise field picks a heading per particle over
+  // the full turn and a second picks its speed, so neighbours travel at
+  // genuinely different angles instead of sliding along the two axes — the
+  // axis-aligned sine pair this replaced made the whole field shear
+  // left-right/up-down together.
+  float heading = snoise(vec3(home * 1.6 + vec2(21.70, 48.30), time * 0.25)) * PI;
+  float speed = snoise(vec3(home * 2.3 + vec2(91.20, 7.80), time * 0.30)) * 0.5 + 0.5;
+  vec2 flow = vec2(cos(heading), sin(heading)) * speed * 0.045;
+
+  // Each particle also orbits its own home on a randomised phase. The motion
+  // closes on itself, so the field keeps wandering in every direction without
+  // any particle escaping its designated area.
+  float phase = snoise(vec3(home * 3.0 + vec2(63.10, 29.40), 0.0)) * TAU;
+  float orbit = time * 0.55 + phase;
+  vec2 swirl = vec2(cos(orbit), sin(orbit)) * 0.014;
+
+  // Fine grain on top so it reads as texture, not one laminar sheet.
   float n3 = snoise(vec3(home * 20.0 + vec2(18.49, 72.97), time * 0.5));
   float n4 = snoise(vec3(home * 20.0 + vec2(50.90, 120.95), time * 0.5));
-  vec2 drift = vec2(n1, n2) * 0.03 + vec2(n3, n4) * 0.005;
-
-  // Slow standing wave, strongest away from the pointer.
-  drift.x += sin((home.x * 20.0) + (time * 4.0)) * 0.02 * clamp(dist, 0.0, 1.0);
-  drift.y += cos((home.y * 20.0) + (time * 3.0)) * 0.02 * clamp(dist, 0.0, 1.0);
+  vec2 drift = flow + swirl + vec2(n3, n4) * 0.006;
 
   // Push away from the ring centre, weighted by the tight band.
   pos -= (uRingPos - (home + drift)) * pow(corePow, 0.75) * uDisplacement;
@@ -154,7 +166,7 @@ uniform sampler2D uPosition;
 uniform float uPixelRatio;
 uniform float uParticleScale;
 uniform vec2 uRingPos;
-uniform float uMaxRadius;
+uniform vec2 uFieldSize;
 varying float vScale;
 varying float vVelocity;
 varying float vFalloff;
@@ -166,10 +178,13 @@ void main() {
   vVelocity = particle.w;
   vLocalPos = particle.xy;
 
-  // The field is a disc around the pointer. Outside it there is nothing —
-  // fade over the last 25% so the edge is soft rather than a cut circle.
-  float dist = distance(particle.xy, uRingPos);
-  vFalloff = 1.0 - smoothstep(uMaxRadius * 0.75, uMaxRadius, dist);
+  // The field fills its whole designated box rather than a disc that follows
+  // the pointer — previously everything outside a 0.55 radius of the ring was
+  // culled, so most of the hero sat empty and the field appeared to move only
+  // where the pointer was. Fading on the box (not a radius) keeps the corners
+  // populated; the CSS mask on the host does the final soft edge.
+  vec2 q = abs(particle.xy) / uFieldSize;
+  vFalloff = 1.0 - smoothstep(0.80, 1.0, max(q.x, q.y));
 
   gl_Position = projectionMatrix * modelViewMatrix * vec4(particle.xy, 0.0, 1.0);
   gl_PointSize = max(vScale * 7.0, 0.0) * uPixelRatio * uParticleScale * vFalloff;
@@ -334,7 +349,9 @@ export default function HeroCanvas({ dark } = {}) {
         uColor2: { value: new THREE.Color(readColor('--chart-2', '#1baf7a')) },
         uColor3: { value: new THREE.Color(readColor('--chart-3', '#eda100')) },
         uRingPos: { value: new THREE.Vector2(0, 0) },
-        uMaxRadius: { value: 0.55 },
+        // Matches the ±1.1 home placement below, so the box fade lands just
+        // inside the outermost particles.
+        uFieldSize: { value: new THREE.Vector2(1.1, 1.1) },
         uOpacity: { value: isDark ? 0.7 : 0.38 },
         uTime: { value: 0 },
         uDarkMode: { value: isDark ? 1 : 0 },
@@ -361,13 +378,18 @@ export default function HeroCanvas({ dark } = {}) {
       if (rect.width > 0 && rect.height > 0) renderer.setSize(rect.width, rect.height)
     }
 
+    // Listened for on `window`, not on the host: the mount is
+    // `pointer-events-none` (so it never swallows clicks on the hero CTAs) and
+    // the hero copy sits on top of it, so a listener bound to the host would
+    // never fire. Coordinates are mapped against the host's own rect, and the
+    // pointer only counts as active while it is actually over that rect.
     const onPointerMove = (e) => {
       const rect = host.getBoundingClientRect()
-      pointer.set(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -(((e.clientY - rect.top) / rect.height) * 2 - 1)
-      )
-      pointerActive = true
+      if (rect.width <= 0 || rect.height <= 0) return
+      const x = (e.clientX - rect.left) / rect.width
+      const y = (e.clientY - rect.top) / rect.height
+      pointerActive = x >= 0 && x <= 1 && y >= 0 && y <= 1
+      if (pointerActive) pointer.set(x * 2 - 1, -(y * 2 - 1))
     }
     const onPointerLeave = () => {
       pointerActive = false
@@ -382,7 +404,9 @@ export default function HeroCanvas({ dark } = {}) {
       const idleY = Math.cos(t * 0.23) * 0.22 + Math.cos(t * 0.41) * 0.08
       const targetX = pointerActive ? pointer.x : idleX
       const targetY = pointerActive ? pointer.y : idleY
-      const ease = pointerActive ? 0.06 : 0.02
+      // Tighter while tracking so the bloom reads as attached to the cursor;
+      // slower on idle so the wander stays lazy.
+      const ease = pointerActive ? 0.12 : 0.02
       ring.x += (targetX - ring.x) * ease
       ring.y += (targetY - ring.y) * ease
 
@@ -433,8 +457,9 @@ export default function HeroCanvas({ dark } = {}) {
       observer.observe(host)
     }
 
-    host.addEventListener('pointermove', onPointerMove)
-    host.addEventListener('pointerleave', onPointerLeave)
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+    window.addEventListener('pointerleave', onPointerLeave)
+    window.addEventListener('blur', onPointerLeave)
 
     let rzT
     const onResize = () => {
@@ -446,8 +471,9 @@ export default function HeroCanvas({ dark } = {}) {
     return () => {
       if (raf) cancelAnimationFrame(raf)
       observer?.disconnect()
-      host.removeEventListener('pointermove', onPointerMove)
-      host.removeEventListener('pointerleave', onPointerLeave)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerleave', onPointerLeave)
+      window.removeEventListener('blur', onPointerLeave)
       window.removeEventListener('resize', onResize)
       clearTimeout(rzT)
       rtRead.dispose()

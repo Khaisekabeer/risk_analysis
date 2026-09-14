@@ -15,7 +15,6 @@ import { FrontierCurve } from '../../components/charts'
 import { formatINR } from '../../lib/formatINR'
 import { endpoints } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
-import * as fallback from '../../lib/fallbacks'
 
 const compact = (v) => formatINR(v, { compact: true })
 
@@ -48,13 +47,10 @@ export default function Optimizer() {
   const [appliedBudget, setAppliedBudget] = useState(null)
 
   const plan = useApi(() => endpoints.optimizationPlan(appliedBudget), [appliedBudget], {
-    fallback: fallback.plan(appliedBudget),
     isEmpty: (d) => !d?.controls?.length,
   })
 
-  const frontier = useApi(() => endpoints.frontier(14).then((r) => r.curve), [], {
-    fallback: fallback.frontier(14),
-  })
+  const frontier = useApi(() => endpoints.frontier(14).then((r) => r.curve), [])
 
   const runOptimization = useAction((budget) => endpoints.runOptimization(budget))
 

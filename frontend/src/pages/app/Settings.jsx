@@ -4,11 +4,10 @@ import { AsyncBoundary, Button, Field, Input, Panel, Spinner } from '../../compo
 import { formatINR } from '../../lib/formatINR'
 import { endpoints, BASE_URL } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
-import * as fallback from '../../lib/fallbacks'
 
 export default function Settings() {
-  const settings = useApi(() => endpoints.settings(), [], { fallback: fallback.settings })
-  const health = useApi(() => endpoints.health(), [], { fallback: fallback.health })
+  const settings = useApi(() => endpoints.settings(), [])
+  const health = useApi(() => endpoints.health(), [])
   const save = useAction((body) => endpoints.updateSettings(body))
 
   const [budgetDraft, setBudgetDraft] = useState(null)

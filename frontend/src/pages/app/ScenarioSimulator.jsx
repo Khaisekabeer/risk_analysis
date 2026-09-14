@@ -4,7 +4,6 @@ import { AsyncBoundary, Button, Chip, Input, Panel, Spinner } from '../../compon
 import { formatINR } from '../../lib/formatINR'
 import { endpoints } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
-import * as fallback from '../../lib/fallbacks'
 
 const compact = (v) => formatINR(v, { compact: true })
 
@@ -20,12 +19,9 @@ export default function ScenarioSimulator() {
   const [coverageDraft, setCoverageDraft] = useState(null)
 
   const plan = useApi(() => endpoints.optimizationPlan(), [], {
-    fallback: fallback.plan(),
     isEmpty: (d) => !d?.controls?.length,
   })
-  const distribution = useApi(() => endpoints.distribution(), [], {
-    fallback: fallback.distribution,
-  })
+  const distribution = useApi(() => endpoints.distribution(), [])
 
   const controls = plan.data?.controls ?? []
   const action = controls.find((c) => c.id === actionId) ?? controls[0] ?? null

@@ -231,9 +231,11 @@ export function ErrorState({ message, onRetry, compact = false }) {
 
 /**
  * Renders the right thing for each request state so no screen has to
- * re-implement the loading / empty / success ladder. A failed request is never
- * surfaced as an error: useApi substitutes the demo constants for that view,
- * so the screen keeps rendering a complete set of figures.
+ * re-implement the loading / error / empty / success ladder.
+ *
+ * A failed request is surfaced as an error with a retry, never papered over
+ * with stand-in figures: a screen that cannot reach its endpoint has to say
+ * so, because a number that looks real but is not is worse than no number.
  */
 export function AsyncBoundary({
   state,
@@ -242,28 +244,13 @@ export function AsyncBoundary({
   emptyMessage = 'No records returned.',
   emptyAction,
 }) {
-  const { loading, empty, data } = state
+  const { loading, error, empty, data } = state
 
   if (loading && data === undefined) return <Loading message={loadingMessage} />
+  if (error) return <ErrorState message={error} onRetry={state.refetch} />
   if (empty) return <EmptyState message={emptyMessage} action={emptyAction} />
 
   return children
-}
-
-export function OfflineBanner({ message, onRetry }) {
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xs border border-status-medium/40 bg-status-medium/5 px-3 py-2 text-[11.5px] leading-relaxed text-on-variant">
-      <Icon name="cloud_off" className="text-status-medium" style={{ fontSize: 15 }} />
-      <span className="min-w-0 flex-1">
-        <span className="font-medium text-on-surface">Showing saved demo figures.</span> {message}
-      </span>
-      {onRetry && (
-        <button onClick={onRetry} className="font-medium text-accent hover:underline">
-          Retry
-        </button>
-      )}
-    </div>
-  )
 }
 
 /** Determinate progress for uploads; indeterminate while the server works. */

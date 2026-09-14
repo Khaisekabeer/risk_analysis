@@ -6,7 +6,6 @@ import {
   Button,
   Chip,
   Icon,
-  Loading,
   Panel,
   SlideOver,
   Spinner,
@@ -15,7 +14,6 @@ import { MultiRadar } from '../../components/charts'
 import { formatINR } from '../../lib/formatINR'
 import { endpoints } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
-import * as fallback from '../../lib/fallbacks'
 
 // Tailwind's scanner needs literal class strings — no `bg-status-${x}`.
 const TONE_BAR = {
@@ -34,9 +32,17 @@ const THREAT_TONE = {
 
 function Gauge({ score, loading }) {
   const circ = 2 * Math.PI * 31
-  const color =
-    score >= 70 ? 'var(--status-critical)' : score >= 40 ? 'var(--status-medium)' : 'var(--status-low)'
-  const band = score >= 70 ? 'Critical' : score >= 40 ? 'Elevated' : 'Contained'
+  // `score` is null when the KPIs have not arrived: an unscored gauge must not
+  // read "0 · Contained", which is a verdict rather than an absence.
+  const unknown = score == null
+  const color = unknown
+    ? 'var(--theme-surface-surface-container-highest)'
+    : score >= 70
+      ? 'var(--status-critical)'
+      : score >= 40
+        ? 'var(--status-medium)'
+        : 'var(--status-low)'
+  const band = unknown ? 'not computed' : score >= 70 ? 'Critical' : score >= 40 ? 'Elevated' : 'Contained'
   return (
     <div className="flex items-center gap-4 rounded-md border border-outline-variant bg-surface-container p-4">
       <svg width="72" height="72" viewBox="0 0 76 76" className="flex-none">
@@ -48,7 +54,7 @@ function Gauge({ score, loading }) {
           strokeWidth="7"
           fill="none"
         />
-        {!loading && (
+        {!loading && !unknown && (
           <circle
             cx="38"
             cy="38"
@@ -68,7 +74,7 @@ function Gauge({ score, loading }) {
           Enterprise Risk Score
         </p>
         <p className="mt-1.5 font-mono text-2xl font-medium leading-none">
-          {loading ? '—' : score}
+          {loading || unknown ? '—' : score}
         </p>
         <p className="mt-1.5 text-[11.5px] text-on-variant">
           of 100 ·{' '}
@@ -107,41 +113,27 @@ export default function Dashboard() {
   const [drill, setDrill] = useState(null)
   const [selectedRuns, setSelectedRuns] = useState(null) // null = all runs
 
-  // Merged over the demo shape so a partial response can never leave a field
-  // the UI reads undefined.
-  const kpis = useApi(() => endpoints.kpis().then((r) => ({ ...fallback.kpis, ...r })), [], {
-    fallback: fallback.kpis,
-  })
+  const kpis = useApi(() => endpoints.kpis(), [])
 
-  const contributors = useApi(
-    () => endpoints.contributors(6).then((r) => r.contributors),
-    [],
-    { fallback: fallback.contributors },
-  )
+  const contributors = useApi(() => endpoints.contributors(6).then((r) => r.contributors), [])
 
-  const threats = useApi(() => endpoints.threats().then((r) => r.threats), [], {
-    fallback: fallback.threats,
-  })
+  const runs = useApi(() => endpoints.runs(12).then((r) => r.runs), [])
 
-  const runs = useApi(() => endpoints.runs(12).then((r) => r.runs), [], {
-    fallback: fallback.runs,
-  })
-
-  const plan = useApi(() => endpoints.optimizationPlan(), [], {
-    fallback: fallback.plan(),
-  })
+  const plan = useApi(() => endpoints.optimizationPlan(), [])
 
   const newRun = useAction(() => endpoints.runSimulation({}))
 
   const k = kpis.data
-  const portfolio = k?.portfolio ?? fallback.kpis.portfolio
+  // Empty, not a stand-in: every read below is guarded on `k` or optional, so
+  // a failed request leaves the tiles showing "—" rather than a fake figure.
+  const portfolio = k?.portfolio ?? {}
   const totalAssetValue = portfolio.total_asset_value_inr
 
   // VaR₉₅ as a share of total asset value, scaled to a 0-100 read. There is
   // no such score in the engine — this is one illustrative rollup of two
   // figures that are real, not a model output.
   const riskScore = useMemo(() => {
-    if (!k || !totalAssetValue) return 0
+    if (!k || !totalAssetValue) return null
     return Math.min(100, Math.round((k.enterprise_var_95_inr / totalAssetValue) * 1000))
   }, [k, totalAssetValue])
 
@@ -185,20 +177,20 @@ export default function Dashboard() {
   const fundedCost = fundedControls.reduce((s, c) => s + c.cost, 0)
   const contributorList = useMemo(() => contributors.data ?? [], [contributors.data])
   const maxEal = contributorList.length ? contributorList[0].eal : 1
-  const threatList = useMemo(() => threats.data ?? [], [threats.data])
 
+  // This unit's own scenarios grouped by threat category, straight from
+  // /dashboard/contributors — not the portfolio mix rescaled to the unit.
   const drillThreats = useMemo(() => {
-    if (!drill || !threatList.length) return []
-    const totalUnitEal = contributorList.reduce((s, u) => s + u.eal, 0) || 1
-    const share = drill.eal / totalUnitEal
-    const maxT = threatList[0].eal * share || 1
-    return threatList.map((t) => ({
+    const mix = drill?.threat_mix ?? []
+    if (!mix.length) return []
+    const maxT = mix[0].eal || 1
+    return mix.map((t) => ({
       name: t.name,
-      amount: t.eal * share,
-      pct: Math.round(((t.eal * share) / maxT) * 100),
+      amount: t.eal,
+      pct: Math.round((t.eal / maxT) * 100),
       tone: THREAT_TONE[t.name] ?? 'low',
     }))
-  }, [drill, threatList, contributorList])
+  }, [drill])
 
   return (
     <AppLayout
@@ -243,9 +235,14 @@ export default function Dashboard() {
       }
     >
       <div className="flex h-full min-h-0 flex-col gap-4">
-        {newRun.error && (
+        {(newRun.error || kpis.error) && (
           <p className="flex-none rounded-xs border border-status-critical/40 bg-status-critical/5 px-3 py-2 text-xs text-on-variant">
-            {newRun.error}
+            {newRun.error ?? kpis.error}{' '}
+            {kpis.error && (
+              <button onClick={kpis.refetch} className="font-medium text-accent hover:underline">
+                Retry
+              </button>
+            )}
           </p>
         )}
 
@@ -444,8 +441,10 @@ export default function Dashboard() {
             </div>
             <div className="h-px bg-outline-variant" />
             <p className="text-[13px] font-medium">Threat mix driving this unit</p>
-            {threats.loading && !threatList.length ? (
-              <Loading message="Loading threat mix…" />
+            {drillThreats.length === 0 ? (
+              <p className="text-[12.5px] text-on-variant">
+                No scenarios attributed to this unit.
+              </p>
             ) : (
               <div className="flex flex-col gap-2.5">
                 {drillThreats.map((t) => (

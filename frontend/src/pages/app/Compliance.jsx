@@ -11,7 +11,6 @@ import {
 } from '../../components/ui'
 import { endpoints } from '../../lib/apiClient'
 import { useApi, useAction } from '../../lib/useApi'
-import * as fallback from '../../lib/fallbacks'
 
 const STATUS_STYLE = {
   Covered: { text: 'text-status-low', dot: 'bg-status-low' },
@@ -23,13 +22,10 @@ export default function Compliance() {
   const [framework, setFramework] = useState(null)
   const [toast, setToast] = useState(null)
 
-  const frameworks = useApi(() => endpoints.frameworks().then((r) => r.frameworks), [], {
-    fallback: fallback.frameworks,
-  })
+  const frameworks = useApi(() => endpoints.frameworks().then((r) => r.frameworks), [])
   const mappings = useApi(
     () => endpoints.complianceMappings(framework).then((r) => r.mappings),
     [framework],
-    { fallback: fallback.mappings },
   )
 
   const exportReport = useAction(async (format) => {
@@ -139,7 +135,11 @@ export default function Compliance() {
         </AsyncBoundary>
 
         <Panel
-          title={framework ? `${framework} clauses` : 'All clauses'}
+          title={
+            framework
+              ? `${frameworkList.find((f) => f.key === framework)?.name ?? framework} clauses`
+              : 'All clauses'
+          }
           actions={
             <div className="flex items-center gap-2">
               {framework && (

@@ -1,36 +1,39 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import LandingNav from '../components/landing/LandingNav'
 import HeroCanvas from '../components/landing/HeroCanvas'
-import Sparkline from '../components/landing/Sparkline'
 import { Button, Card, Chip, Eyebrow, Icon } from '../components/ui'
 import { formatINR } from '../lib/formatINR'
 import { useTheme } from '../lib/theme'
 import { endpoints } from '../lib/apiClient'
 import { useApi } from '../lib/useApi'
-import * as fallback from '../lib/fallbacks'
+
+/** Renders a count only once the engine has returned one. */
+const count = (v) => (v == null ? '—' : v.toLocaleString('en-IN'))
+/** Bare integer for the shell transcripts; never NaN. */
+const intOf = (v) => (v == null ? '—' : Math.round(v))
 
 /**
- * The landing page quotes the same figures the dashboard does, so it reads
- * them from the live engine and falls back to the saved aggregates when the
- * service is not running — a marketing page must never show a spinner or an
- * error, so there is no loading state here.
+ * The landing page quotes the same figures the dashboard does, read from the
+ * live engine. When the service is not running the figures read "—": this page
+ * never invents a number, because a headline figure that looks live but is not
+ * is the one thing a risk product cannot ship.
  */
 function useHeadlineFigures() {
-  const kpis = useApi(() => endpoints.kpis().then((r) => ({ ...fallback.kpis, ...r })), [], {
-    fallback: fallback.kpis,
-  })
-  const plan = useApi(() => endpoints.optimizationPlan(), [], { fallback: fallback.plan() })
-  const k = kpis.data ?? fallback.kpis
-  const p = plan.data ?? fallback.plan()
+  const kpis = useApi(() => endpoints.kpis(), [])
+  const plan = useApi(() => endpoints.optimizationPlan(), [])
+  const k = kpis.data
+  const p = plan.data
   return {
-    eal: k.enterprise_eal_inr,
-    var95: k.enterprise_var_95_inr,
-    assets: k.portfolio.assets,
-    scenarios: k.scenario_count,
-    exposed: k.portfolio.internetExposed,
-    budget: p.budget_inr,
-    residual: p.residual_eal_inr,
+    eal: k?.enterprise_eal_inr,
+    var95: k?.enterprise_var_95_inr,
+    assets: k?.portfolio?.assets,
+    scenarios: k?.scenario_count,
+    exposed: k?.portfolio?.internetExposed,
+    vulnerabilities: k?.portfolio?.vulnerabilities,
+    budget: p?.budget_inr,
+    residual: p?.residual_eal_inr,
+    offline: !!(kpis.error || plan.error),
   }
 }
 
@@ -94,8 +97,6 @@ const CodeBlock = ({ children }) => (
 )
 
 export default function Landing() {
-  const [risk, setRisk] = useState({ value: 24.6, delta: 0 })
-  const onValue = useCallback((value, delta) => setRisk({ value, delta }), [])
   const { theme } = useTheme()
   const figures = useHeadlineFigures()
 
@@ -125,8 +126,8 @@ export default function Landing() {
             <div className="mt-2 flex flex-wrap justify-center gap-xl">
               {[
                 [formatINR(figures.eal, { compact: true }), 'expected annual loss, current posture'],
-                [figures.assets.toLocaleString('en-IN'), 'assets under continuous assessment'],
-                [figures.scenarios.toLocaleString('en-IN'), 'risk scenarios modelled'],
+                [count(figures.assets), 'assets under continuous assessment'],
+                [count(figures.scenarios), 'risk scenarios modelled'],
               ].map(([num, label], i) => (
                 <div
                   key={label}
@@ -168,21 +169,17 @@ export default function Landing() {
                   <div className="mt-auto pt-lg">
                     <div className="flex flex-wrap items-baseline justify-between gap-4">
                       <div>
-                        <span className="mr-2 font-mono text-xs text-on-variant">risk_score</span>
+                        <span className="mr-2 font-mono text-xs text-on-variant">var_95</span>
                         <span className="font-mono text-[28px] font-medium">
-                          {risk.value.toFixed(1)}
+                          {formatINR(figures.var95, { compact: true })}
                         </span>
                       </div>
-                      <span className="font-mono text-xs text-accent">
-                        Δ {risk.delta >= 0 ? '+' : ''}
-                        {risk.delta.toFixed(1)} / 7d
-                      </span>
+                      <span className="font-mono text-xs text-accent">worst 5% of years</span>
                     </div>
-                    <Sparkline onValue={onValue} />
                     <div className="mt-md flex flex-wrap gap-x-lg gap-y-md border-t border-outline-variant pt-md font-mono text-xs text-on-variant">
-                      <span>sources: 6 vendor APIs</span>
-                      <span>assets: {figures.assets.toLocaleString('en-IN')}</span>
-                      <span>exposed: {figures.exposed.toLocaleString('en-IN')}</span>
+                      <span>assets: {count(figures.assets)}</span>
+                      <span>exposed: {count(figures.exposed)}</span>
+                      <span>findings: {count(figures.vulnerabilities)}</span>
                     </div>
                   </div>
                 </Card>
@@ -285,17 +282,17 @@ export default function Landing() {
                   'An XGBoost model predicts incident probability per asset; impact is priced from actuarial benchmarks — cost per stolen record, regulatory fine tiers, downtime hours — not a guessed multiplier. A 2,000-iteration Monte Carlo turns that into EAL and VaR.',
                   `$ python risk_engine.py
 {
-  "eal": ${Math.round(figures.eal)},   // ${formatINR(figures.eal, { compact: true })}
-  "var_95": ${Math.round(figures.var95)},  // ${formatINR(figures.var95, { compact: true })}
-  "scenarios": ${figures.scenarios}
+  "eal": ${intOf(figures.eal)},   // ${formatINR(figures.eal, { compact: true })}
+  "var_95": ${intOf(figures.var95)},  // ${formatINR(figures.var95, { compact: true })}
+  "scenarios": ${intOf(figures.scenarios)}
 }`,
                 ],
                 [
                   '03',
                   'Fund what reduces loss',
                   'A 0/1 knapsack picks the control set that maximises risk reduction under your budget, with each control mapped to the framework clauses it satisfies.',
-                  `$ python investment_optimizer.py --budget ${Math.round(figures.budget)}
-✓ funded → ${formatINR(figures.eal - figures.residual, { compact: true })} reduction`,
+                  `$ python investment_optimizer.py --budget ${intOf(figures.budget)}
+✓ funded → ${figures.eal == null || figures.residual == null ? '\u2014' : formatINR(figures.eal - figures.residual, { compact: true })} reduction`,
                 ],
               ].map(([num, title, body, code], i) => (
                 <Reveal key={num} delay={i * 60}>
