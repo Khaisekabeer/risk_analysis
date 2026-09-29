@@ -74,14 +74,15 @@ def _build_feature_df(assets: list[Asset], vulns_by_asset: dict) -> pd.DataFrame
             df[col] = 0
     df = df[_feature_names]
 
-    # Scale numerical features
+    # Scale numerical features — only those the scaler was trained on
     num_cols = [
         "internet_exposed", "asset_criticality_score", "data_sensitivity_score",
         "revenue_dependency_score", "asset_value_inr", "hourly_downtime_cost_inr",
         "failed_logins", "anomaly_count", "vuln_count", "critical_vuln_count",
         "max_cvss", "mean_cvss", "max_epss",
     ]
-    existing_num = [c for c in num_cols if c in df.columns]
+    scaler_cols = list(_scaler.feature_names_in_) if hasattr(_scaler, "feature_names_in_") else num_cols
+    existing_num = [c for c in num_cols if c in df.columns and c in scaler_cols]
     df[existing_num] = _scaler.transform(df[existing_num])
     return df
 
