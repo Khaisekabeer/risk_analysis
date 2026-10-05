@@ -1,0 +1,16 @@
+{
+    "source": "IBM Cost of a Data Breach Report 2023 (India Region) & Standard Regulatory Baselines",
+    "benchmarks": {
+        "cost_per_stolen_record_inr": 13500,
+        "average_records_per_server": 50000,
+        "average_records_per_database": 250000,
+        "regulatory_fines": {
+            "low_sensitivity": 0,
+            "medium_sensitivity": 500000,
+            "high_sensitivity": 2500000,
+            "critical_pii_pci": 5000000
+        },
+        "reputational_damage_multiplier_per_criticality_level": 500000,
+        "downtime_resolution_hours_mean": 24
+    }
+}
