@@ -9,9 +9,9 @@ router = APIRouter(prefix="/api/v1/telemetry", tags=["Telemetry"])
 def get_presets():
     return {
         "presets": [
-            {"name": "Ransomware Wave", "description": "Simulates a sharp rise in ransomware indicators across servers.", "asset_count": 42, "vuln_count": 115},
-            {"name": "Data Breach", "description": "Simulates anomalous DB access patterns and high-severity web vulns.", "asset_count": 15, "vuln_count": 34},
-            {"name": "Insider Threat", "description": "Simulates privilege escalation and mass downloads from internal IP.", "asset_count": 8, "vuln_count": 12},
+            {"name": "Ransomware Wave", "description": "Simulates a sharp rise in ransomware indicators across servers.", "asset_count": 42, "vuln_count": 115, "eal_inr": 0, "source": "demo preset"},
+            {"name": "Data Breach", "description": "Simulates anomalous DB access patterns and high-severity web vulns.", "asset_count": 15, "vuln_count": 34, "eal_inr": 0, "source": "demo preset"},
+            {"name": "Insider Threat", "description": "Simulates privilege escalation and mass downloads from internal IP.", "asset_count": 8, "vuln_count": 12, "eal_inr": 0, "source": "demo preset"},
         ]
     }
 
@@ -24,7 +24,7 @@ def load_preset(name: str, db: Session = Depends(get_db)):
     )
     db.add(event)
     db.commit()
-    return {"status": "ok", "preset": name}
+    return {"status": "ok", "preset": name, "source": "demo preset", "records_accepted": 0, "note": "Preset loaded successfully."}
 
 @router.get("/events")
 def get_events(limit: int = 20, db: Session = Depends(get_db)):
@@ -49,4 +49,12 @@ def upload_telemetry(file: UploadFile = File(...), db: Session = Depends(get_db)
     )
     db.add(event)
     db.commit()
-    return {"status": "ok", "filename": file.filename}
+    return {
+        "status": "ok",
+        "filename": file.filename,
+        "records_seen": 0,
+        "records_accepted": 0,
+        "recognised_fields": [],
+        "matched_known_assets": 0,
+        "validation_errors": [],
+    }

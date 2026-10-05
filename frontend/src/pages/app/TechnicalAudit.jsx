@@ -58,7 +58,8 @@ function Vulnerabilities() {
   )
 
   const summary = useApi(() => endpoints.vulnerabilitySummary(), [])
-  const rows = vulns.data?.rows ?? []
+  const rows = Array.isArray(vulns.data) ? vulns.data : vulns.data?.rows ?? []
+  const totalFindings = vulns.data?.total ?? rows.length
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -95,7 +96,7 @@ function Vulnerabilities() {
               }`}
             >
               {s}
-              {summary.data ? ` ${summary.data.by_severity?.[s]?.toLocaleString('en-IN') ?? 0}` : ''}
+              {summary.data ? ` ${summary.data.by_severity?.[s] ?? summary.data[s.toLowerCase()] ?? 0}` : ''}
             </button>
           ))}
           {['Open', 'In Progress', 'Resolved'].map((s) => (
@@ -115,7 +116,7 @@ function Vulnerabilities() {
         </div>
 
         <span className="ml-auto text-xs text-on-variant">
-          {vulns.data ? `${vulns.data.total.toLocaleString('en-IN')} findings` : ''}
+          {vulns.data ? `${totalFindings.toLocaleString('en-IN')} findings` : ''}
         </span>
       </div>
 

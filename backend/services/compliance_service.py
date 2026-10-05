@@ -39,10 +39,13 @@ def get_framework_summary(db: Session, budget_inr: float = None) -> list[dict]:
         covered = base_coverage + funded_coverage
         
         results.append({
+            "key": fw,
             "name": fw,
+            "total": data["total"],
             "total_controls": data["total"],
             "covered": covered,
-            "pct": round((covered / data["total"]) * 100)
+            "pct": round((covered / data["total"]) * 100),
+            "openFindings": max(0, data["total"] - covered),
         })
         
     return results
@@ -59,6 +62,11 @@ def get_mappings_for_framework(db: Session, framework: str, budget_inr: float = 
         # Simulate mapping: just prepend the framework name
         # A real implementation would parse c.framework_mappings JSON
         mappings.append({
+            "clause": f"{framework[:3].upper()}-{c.id}",
+            "frameworkName": framework,
+            "objective": c.name,
+            "control": c.name,
+            "openFindings": 0 if is_funded else 1,
             "control_id": f"{framework[:3].upper()}-{c.id}",
             "control_name": c.name,
             "status": status,
