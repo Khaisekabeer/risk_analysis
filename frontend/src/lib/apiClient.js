@@ -103,6 +103,8 @@ export const endpoints = {
   vulnerabilities: (params = {}) =>
     unwrap(api.get('/api/v1/audit/vulnerabilities', { params })),
   vulnerabilitySummary: () => unwrap(api.get('/api/v1/audit/vulnerabilities/summary')),
+  cveDetails: (cveId) =>
+    unwrap(api.get(`/api/v1/audit/cves/${encodeURIComponent(cveId)}`)),
   controls: () => unwrap(api.get('/api/v1/audit/controls')),
   assets: (limit = 8) => unwrap(api.get('/api/v1/audit/assets', { params: { limit } })),
   remediation: (limit = 60) =>

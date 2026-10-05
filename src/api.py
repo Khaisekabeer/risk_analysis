@@ -27,6 +27,7 @@ import sqlite3
 import hashlib
 import io
 import json
+import re
 import secrets
 import sys
 import threading
@@ -36,6 +37,7 @@ from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
+import requests
 
 # ai_copilot / scenario_sandbox import their sibling modules as bare
 # `from config import ...` (script-style), so src/ itself must be on the
@@ -818,8 +820,18 @@ def audit_vulnerabilities(
     if status:
         view = view[view["status"] == status]
 
-    ordered = view.sort_values(["cvss_score", "epss_score"], ascending=False)
-    rows = ordered.head(limit)[
+    # Interleave severity bands so the default top-100 is useful for review
+    # across the full severity range, not only the highest CVSS scores.
+    ordered = view.copy()
+    ordered["_severity_rank"] = ordered.groupby("severity", sort=False).cumcount()
+    ordered = ordered.sort_values(
+        ["_severity_rank", "cvss_score", "epss_score"],
+        ascending=[True, False, False],
+    )
+    # Keep the balanced sample, but avoid presenting it as a repeating
+    # Critical → High → Medium → Low sequence. A fixed seed keeps refreshes
+    # stable while mixing the displayed order.
+    rows = ordered.head(limit).sample(frac=1, random_state=42)[
         [
             "vuln_id",
             "cve_id",
@@ -844,6 +856,89 @@ def audit_vulnerability_summary():
         "by_severity": {str(k): int(v) for k, v in view["severity"].value_counts().items()},
         "by_status": {str(k): int(v) for k, v in view["status"].value_counts().items()},
         "exploitable": int((view["epss_score"] >= 0.5).sum()),
+    }
+
+
+@app.get("/api/v1/audit/cves/{cve_id}", tags=["Audit"])
+def audit_cve_details(cve_id: str):
+    """Fetch authoritative CVE details from the NVD CVE API."""
+    normalized_id = cve_id.upper()
+    if not re.fullmatch(r"CVE-\d{4}-\d{4,}", normalized_id):
+        raise HTTPException(status_code=422, detail="Enter a valid CVE identifier.")
+
+    try:
+        response = requests.get(
+            "https://services.nvd.nist.gov/rest/json/cves/2.0",
+            params={"cveId": normalized_id},
+            headers={"User-Agent": "Riskyn-Audit/1.0"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.Timeout as exc:
+        raise HTTPException(
+            status_code=504, detail="The NVD service took too long to respond."
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502, detail="The NVD service returned an invalid response."
+        ) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not retrieve CVE details from the NVD service."
+        ) from exc
+
+    vulnerabilities = payload.get("vulnerabilities") or []
+    if not vulnerabilities:
+        raise HTTPException(
+            status_code=404, detail=f"{normalized_id} was not found in the NVD database."
+        )
+
+    cve = vulnerabilities[0].get("cve") or {}
+    descriptions = cve.get("descriptions") or []
+    description = next(
+        (item.get("value") for item in descriptions if item.get("lang") == "en"),
+        descriptions[0].get("value") if descriptions else "",
+    )
+
+    metrics = cve.get("metrics") or {}
+    cvss = None
+    for metric_name in ("cvssMetricV40", "cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+        entries = metrics.get(metric_name) or []
+        if entries:
+            cvss = entries[0]
+            break
+    cvss_data = (cvss or {}).get("cvssData") or {}
+
+    weaknesses = []
+    for weakness in cve.get("weaknesses") or []:
+        for item in weakness.get("description") or []:
+            value = item.get("value")
+            if value and value not in weaknesses:
+                weaknesses.append(value)
+
+    references = [
+        {"url": item.get("url"), "source": item.get("source")}
+        for item in (cve.get("references") or [])
+        if item.get("url")
+    ][:8]
+
+    return {
+        "cve_id": cve.get("id", normalized_id),
+        "description": description,
+        "published": cve.get("published"),
+        "last_modified": cve.get("lastModified"),
+        "cvss": {
+            "version": cvss_data.get("version"),
+            "score": cvss_data.get("baseScore"),
+            "severity": cvss_data.get("baseSeverity") or cvss.get("baseSeverity"),
+            "vector": cvss_data.get("vectorString"),
+        }
+        if cvss
+        else None,
+        "weaknesses": weaknesses,
+        "references": references,
+        "source_url": f"https://nvd.nist.gov/vuln/detail/{normalized_id}",
     }
 
 

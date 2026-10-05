@@ -7,6 +7,7 @@ import {
   Input,
   Panel,
   Severity,
+  SlideOver,
   Spinner,
   TableScroll,
 } from '../../components/ui'
@@ -44,6 +45,8 @@ function Vulnerabilities() {
   const [query, setQuery] = useState('')
   const [severity, setSeverity] = useState(null)
   const [status, setStatus] = useState(null)
+  const [selectedVulnerability, setSelectedVulnerability] = useState(null)
+  const [mappingRequested, setMappingRequested] = useState(false)
 
   const vulns = useApi(
     () =>
@@ -59,8 +62,18 @@ function Vulnerabilities() {
 
   const summary = useApi(() => endpoints.vulnerabilitySummary(), [])
   const rows = vulns.data?.rows ?? []
+  const cveDetails = useApi(
+    () => endpoints.cveDetails(selectedVulnerability.cve_id),
+    [selectedVulnerability?.cve_id],
+    {
+      enabled:
+        mappingRequested &&
+        /^CVE-\d{4}-\d{4,}$/i.test(selectedVulnerability?.cve_id ?? ''),
+    },
+  )
 
   return (
+    <>
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-none flex-wrap items-center gap-2">
         <form
@@ -141,9 +154,49 @@ function Vulnerabilities() {
             </thead>
             <tbody>
               {rows.map((v) => (
-                <tr key={v.vuln_id} className="transition-colors hover:bg-surface-high">
+                <tr
+                  key={v.vuln_id}
+                  className="cursor-pointer transition-colors hover:bg-surface-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View vulnerability ${v.cve_id || v.vuln_id} overview`}
+                  onClick={() => {
+                    setSelectedVulnerability(v)
+                    setMappingRequested(false)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.currentTarget !== event.target) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedVulnerability(v)
+                      setMappingRequested(false)
+                    }
+                  }}
+                >
                   {/* The canonical CVE id straight from asset_vulnerabilities. */}
-                  <Td className="whitespace-nowrap font-mono text-[12.5px]">{v.cve_id}</Td>
+                  <Td className="whitespace-nowrap font-mono text-[12.5px]">
+                    {v.cve_id ? (
+                      <a
+                        href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(v.cve_id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
+                        onClick={(event) => {
+                          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                            return
+                          }
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setSelectedVulnerability(v)
+                          setMappingRequested(true)
+                        }}
+                      >
+                        {v.cve_id}
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </Td>
                   <Td className="whitespace-nowrap font-mono text-[12.5px]">{v.asset_id}</Td>
                   <Td className="whitespace-nowrap text-[12.5px] text-on-variant">
                     {(v.asset_type ?? '').replace(/_/g, ' ')}
@@ -168,6 +221,142 @@ function Vulnerabilities() {
         </TableScroll>
       </AsyncBoundary>
     </div>
+    <SlideOver
+      open={!!selectedVulnerability}
+      onClose={() => {
+        setSelectedVulnerability(null)
+        setMappingRequested(false)
+      }}
+      eyebrow="Vulnerability overview"
+      title={selectedVulnerability?.cve_id || `Finding ${selectedVulnerability?.vuln_id ?? ''}`}
+    >
+      {selectedVulnerability && (
+        <>
+          <div className="grid grid-cols-2 gap-2.5">
+            {[
+              ['CVSS', selectedVulnerability.cvss_score?.toFixed(1) ?? '—'],
+              ['EPSS', selectedVulnerability.epss_score?.toFixed(3) ?? '—'],
+              ['Severity', selectedVulnerability.severity ?? 'Unknown'],
+              ['Status', selectedVulnerability.status ?? 'Unknown'],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-xs border border-outline-variant bg-surface-container p-3"
+              >
+                <p className="text-[11.5px] text-on-variant">{label}</p>
+                <p className="mt-1 font-mono text-sm font-medium">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="h-px bg-outline-variant" />
+          <p className="text-[13px] font-medium">Finding context</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[12.5px]">
+            <dt className="text-on-variant">Asset</dt>
+            <dd className="break-all font-mono">{selectedVulnerability.asset_id}</dd>
+            <dt className="text-on-variant">Asset type</dt>
+            <dd className="capitalize">{(selectedVulnerability.asset_type ?? '').replace(/_/g, ' ') || '—'}</dd>
+            <dt className="text-on-variant">Business unit</dt>
+            <dd>{selectedVulnerability.business_unit || '—'}</dd>
+            <dt className="text-on-variant">Control</dt>
+            <dd className="font-mono">{selectedVulnerability.framework_control_id || '—'}</dd>
+          </dl>
+
+          {selectedVulnerability.cve_id && (
+            <>
+              <div className="h-px bg-outline-variant" />
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[13px] font-medium">NVD CVE mapping</p>
+                <a
+                  href={`https://nvd.nist.gov/vuln/detail/${encodeURIComponent(selectedVulnerability.cve_id)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-accent underline underline-offset-2"
+                >
+                  Open NVD record
+                </a>
+              </div>
+              {!mappingRequested ? (
+                <button
+                  className="self-start text-left text-xs text-accent underline underline-offset-2"
+                  onClick={() => setMappingRequested(true)}
+                >
+                  Fetch CVE details from NVD
+                </button>
+              ) : cveDetails.loading ? (
+                <div className="flex items-center gap-2 text-xs text-on-variant">
+                  <Spinner /> Fetching authoritative details from NVD…
+                </div>
+              ) : cveDetails.error ? (
+                <div className="flex flex-col gap-2">
+                  <p role="alert" className="text-xs text-status-critical">{cveDetails.error}</p>
+                  <button
+                    className="self-start text-xs text-accent underline underline-offset-2"
+                    onClick={cveDetails.refetch}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : cveDetails.data ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-[12.5px] leading-relaxed text-on-variant">
+                    {cveDetails.data.description || 'No description is available in the NVD record.'}
+                  </p>
+                  {cveDetails.data.cvss && (
+                    <div className="rounded-xs border border-outline-variant bg-surface-container p-3">
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span>CVSS {cveDetails.data.cvss.version ?? ''}</span>
+                        <span className="font-mono font-medium">
+                          {cveDetails.data.cvss.score ?? '—'}
+                          {cveDetails.data.cvss.severity ? ` · ${cveDetails.data.cvss.severity}` : ''}
+                        </span>
+                      </div>
+                      {cveDetails.data.cvss.vector && (
+                        <p className="mt-2 break-all font-mono text-[10px] text-on-variant">
+                          {cveDetails.data.cvss.vector}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[11.5px]">
+                    <dt className="text-on-variant">Published</dt>
+                    <dd>{cveDetails.data.published ? new Date(cveDetails.data.published).toLocaleDateString() : '—'}</dd>
+                    <dt className="text-on-variant">Last modified</dt>
+                    <dd>{cveDetails.data.last_modified ? new Date(cveDetails.data.last_modified).toLocaleDateString() : '—'}</dd>
+                    {cveDetails.data.weaknesses?.length > 0 && (
+                      <>
+                        <dt className="text-on-variant">Weaknesses</dt>
+                        <dd>{cveDetails.data.weaknesses.join(', ')}</dd>
+                      </>
+                    )}
+                  </dl>
+                  {cveDetails.data.references?.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-[11.5px] text-on-variant">References</p>
+                      {cveDetails.data.references.slice(0, 5).map((reference) => (
+                        <a
+                          key={reference.url}
+                          href={reference.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="break-all text-[11px] text-accent underline underline-offset-2"
+                        >
+                          {reference.source || reference.url}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10.5px] text-on-variant">
+                    CVE data provided by the NIST National Vulnerability Database.
+                  </p>
+                </div>
+              ) : null}
+            </>
+          )}
+        </>
+      )}
+    </SlideOver>
+    </>
   )
 }
 

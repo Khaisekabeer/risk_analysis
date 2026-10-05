@@ -128,7 +128,9 @@ No loading state by design; unresolved figures render `—`.
 
 | Component | Field | Endpoint → backend source |
 |---|---|---|
-| Table rows | `rows[]` (10 cols) | `GET /audit/vulnerabilities?limit=100` → `vulnerability_view()` sorted by CVSS desc |
+| Table rows | `rows[]` (10 cols) | `GET /audit/vulnerabilities?limit=100` → balanced severity bands, then deterministically shuffled for a mixed, stable display order |
+| Finding overview | CVSS, EPSS, status, asset and control context | Click a vulnerability row in `TechnicalAudit.jsx` |
+| CVE mapping | NVD description, CVSS vector, weaknesses and references | Click a CVE link → `GET /api/v1/audit/cves/{cve_id}` → NVD CVE API |
 | Severity filter chips + counts | `by_severity` | `GET /audit/vulnerabilities/summary` — **whole corpus**, while rows are top-100, issue L-04 |
 | Status filter chips | server-side `status` param | `STATUS_MAP` (`Unpatched→Open`, `In_Progress→In Progress`, `Mitigated→Resolved`) |
 | "N findings" counter | `total` | count *after* filters, *before* the limit |
