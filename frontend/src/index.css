@@ -1,0 +1,288 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   ALLIANCE — self-hosted. No1 is the UI face, No2 the display cut.
+   ============================================================ */
+@font-face {
+  font-family: 'Alliance No1';
+  src: url('/fonts/alliance/AllianceNo1-Regular.woff2') format('woff2'),
+       url('/fonts/alliance/AllianceNo1-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alliance No1';
+  src: url('/fonts/alliance/AllianceNo1-RegularItalic.woff2') format('woff2'),
+       url('/fonts/alliance/AllianceNo1-RegularItalic.woff') format('woff');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alliance No1';
+  src: url('/fonts/alliance/AllianceNo1-Bold.woff2') format('woff2'),
+       url('/fonts/alliance/AllianceNo1-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alliance No1';
+  src: url('/fonts/alliance/AllianceNo1-BoldItalic.woff2') format('woff2'),
+       url('/fonts/alliance/AllianceNo1-BoldItalic.woff') format('woff');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alliance No2';
+  src: url('/fonts/alliance/AllianceNo2-Regular.woff2') format('woff2'),
+       url('/fonts/alliance/AllianceNo2-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Alliance No2';
+  src: url('/fonts/alliance/AllianceNo2-Bold.woff2') format('woff2'),
+       url('/fonts/alliance/AllianceNo2-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Every size in this app is px, so a root font-size would scale nothing.
+   zoom reproduces a browser's 133% view across type, spacing and borders. */
+html {
+  zoom: 1.33;
+}
+
+/* zoom scales rendered size but leaves 100vw/100vh reporting the unzoomed
+   viewport, so a vw-sized root overflows. Percentage heights off a full-height
+   chain fill the zoomed viewport correctly. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* ============================================================
+   DESIGN TOKENS — light is the default, [data-theme="dark"] flips them.
+   Every component reads these through Tailwind, so nothing needs dark:.
+   ============================================================ */
+@layer base {
+  :root {
+    /* Palette — grey scale */
+    --palette-grey-0: #fff;
+    --palette-grey-10: #f8f9fc;
+    --palette-grey-20: #eff2f7;
+    --palette-grey-50: #e6eaf0;
+    --palette-grey-100: #e1e6ec;
+    --palette-grey-200: #cdd4dc;
+    --palette-grey-300: #b2bbc5;
+    --palette-grey-400: #b7bfd9;
+    --palette-grey-800: #45474d;
+    --palette-grey-900: #2f3034;
+    --palette-grey-1000: #212226;
+    --palette-grey-1100: #18191d;
+    --palette-grey-1200: #121317;
+
+    --palette-grey-0-rgb: 255, 255, 255;
+    --palette-grey-10-rgb: 248, 249, 252;
+    --palette-grey-1000-rgb: 33, 34, 38;
+    --palette-grey-1200-rgb: 18, 19, 23;
+
+    /* Accent */
+    --palette-blue-600: #3279f9;
+    --palette-blue-600-rgb: 50, 121, 249;
+
+    /* Semantic surfaces */
+    --theme-surface-surface: var(--palette-grey-0);
+    --theme-surface-on-surface: var(--palette-grey-1200);
+    --theme-surface-on-surface-variant: var(--palette-grey-800);
+    --theme-surface-surface-container: var(--palette-grey-10);
+    --theme-surface-surface-container-high: var(--palette-grey-20);
+    --theme-surface-surface-container-higher: var(--palette-grey-50);
+    --theme-surface-surface-container-highest: var(--palette-grey-100);
+    --theme-surface-inverse-surface: var(--palette-grey-1200);
+    --theme-surface-inverse-on-surface: var(--palette-grey-10);
+    --theme-surface-overlay: rgba(var(--palette-grey-0-rgb), 0.95);
+    --theme-outline: rgba(var(--palette-grey-1000-rgb), 0.12);
+    --theme-outline-variant: rgba(var(--palette-grey-1000-rgb), 0.06);
+
+    --theme-nav-button: var(--palette-grey-1200);
+    --theme-nav-button-hover: var(--palette-grey-900);
+    --theme-surface-on-tonal: var(--palette-grey-0);
+    --code-bg: var(--palette-grey-10);
+    --shadow-panel: 0 12px 40px rgba(var(--palette-grey-1000-rgb), 0.1),
+      0 2px 8px rgba(var(--palette-grey-1000-rgb), 0.05);
+
+    /* Chart series — validated against the light chart surface.
+       Contrast sits under 3:1, so every series is directly labelled. */
+    --chart-1: #3279f9;
+    --chart-2: #1baf7a;
+    --chart-3: #eda100;
+    --chart-grid: rgba(var(--palette-grey-1000-rgb), 0.08);
+    --chart-axis: rgba(var(--palette-grey-1000-rgb), 0.2);
+    --chart-hist: #9dc0f7;
+    --chart-inactive: #b2bbc5;
+
+    /* Status — reserved, always paired with a label */
+    --status-critical: #c8372d;
+    --status-high: #c2670f;
+    --status-medium: #9a7500;
+    --status-low: #147a52;
+
+    color-scheme: light;
+  }
+
+  :root[data-theme='dark'] {
+    --theme-surface-surface: var(--palette-grey-1200);
+    --theme-surface-on-surface: var(--palette-grey-10);
+    --theme-surface-on-surface-variant: var(--palette-grey-300);
+    --theme-surface-surface-container: var(--palette-grey-1100);
+    --theme-surface-surface-container-high: var(--palette-grey-1000);
+    --theme-surface-surface-container-higher: var(--palette-grey-900);
+    --theme-surface-surface-container-highest: var(--palette-grey-800);
+    --theme-surface-inverse-surface: var(--palette-grey-10);
+    --theme-surface-inverse-on-surface: var(--palette-grey-1200);
+    --theme-surface-overlay: rgba(var(--palette-grey-1200-rgb), 0.95);
+    --theme-outline: rgba(var(--palette-grey-10-rgb), 0.12);
+    --theme-outline-variant: rgba(var(--palette-grey-10-rgb), 0.06);
+
+    --theme-nav-button: var(--palette-grey-0);
+    --theme-nav-button-hover: var(--palette-grey-200);
+    --theme-surface-on-tonal: var(--palette-grey-1200);
+    --code-bg: var(--palette-grey-1000);
+    --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+
+    /* Re-stepped for the dark chart surface, not an automatic flip */
+    --chart-1: #4a8ef0;
+    --chart-2: #199e70;
+    --chart-3: #c98500;
+    --chart-grid: rgba(var(--palette-grey-10-rgb), 0.08);
+    --chart-axis: rgba(var(--palette-grey-10-rgb), 0.2);
+    --chart-hist: #2f5c8f;
+    --chart-inactive: #5a6068;
+
+    --status-critical: #e8706a;
+    --status-high: #e0913f;
+    --status-medium: #c9a63a;
+    --status-low: #46b98a;
+
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Alliance No1', 'Google Sans Flex', system-ui, sans-serif;
+    background: var(--theme-surface-surface);
+    color: var(--theme-surface-on-surface);
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  ::selection {
+    background: var(--theme-surface-on-surface);
+    color: var(--theme-surface-surface);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--palette-blue-600);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Material Symbols icon face */
+  .icon {
+    font-family: 'Material Symbols Outlined', sans-serif;
+    font-weight: 300;
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'opsz' 24;
+    font-size: 20px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+  }
+
+  .display-1 {
+    font-size: clamp(44px, 7vw, 92px);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    font-weight: 450;
+    font-variation-settings: 'wdth' 92, 'opsz' 92;
+  }
+  .display-2 {
+    font-size: clamp(30px, 4vw, 52px);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    font-weight: 450;
+    font-variation-settings: 'wdth' 96, 'opsz' 52;
+  }
+  .eyebrow {
+    font-family: 'Google Sans Code', ui-monospace, monospace;
+    font-size: 12.5px;
+    line-height: 15.5px;
+    letter-spacing: 0.11px;
+    color: var(--theme-surface-on-surface-variant);
+    text-transform: lowercase;
+  }
+  .eyebrow::before {
+    content: '// ';
+    color: var(--palette-blue-600);
+  }
+}
+
+@keyframes rk-slide {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes rk-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--theme-outline);
+  border-radius: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

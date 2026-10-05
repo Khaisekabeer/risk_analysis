@@ -1,0 +1,8 @@
+{
+    "T1190": "NIST-SI-2 (Flaw Remediation)",
+    "T1078": "NIST-AC-2 (Account Management)",
+    "T1110": "NIST-IA-5 (Authenticator Management)",
+    "T1486": "NIST-CP-9 (Information System Backup)",
+    "T1059": "NIST-AC-3 (Access Enforcement)",
+    "T1566": "NIST-AT-2 (Security Awareness Training)"
+}
